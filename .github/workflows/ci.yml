@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: check + unit tests + core contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - name: Require/load every MCP tool
+        run: npm run check
+      - name: Unit tests (offline)
+        run: npm test
+      # The MCP contract trained-assist-agent's deploy.sh checks before it moves this
+      # sibling checkout in prod.
+      - uses: actions/checkout@v4
+        with:
+          repository: trained-assist/trained-assist-agent
+          path: .core
+      - name: Core MCP contract (deploy gate)
+        run: node .core/scripts/check-mcp-conformance.js .
+      - name: Core skill contract (shape of a skill repo)
+        run: node .core/scripts/check-skill-contract.js .
