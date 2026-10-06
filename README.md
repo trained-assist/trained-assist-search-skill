@@ -52,6 +52,24 @@ prod.
 3. Keep the **tool name** stable: prompts, quick answers and users refer to it.
 4. Every outbound HTTP call gets a timeout; token files are written mode `0o600`.
 
+## Standalone host provider adapter (experimental)
+
+`src/host-provider.js` exports `createHostProvider({ version, searchOrigin, fetchImpl })` for
+the standalone MCP host's provider interface. `version` must be the pinned 40-character
+source commit. The adapter exposes only the existing read-only `search_serp_free` tool; it
+keeps the tool name and schema from the domain handler.
+
+The adapter pins every outbound request to the configured HTTPS origin, forces manual
+redirect handling, limits a call to two requests, limits queries to 500 characters and
+upstream response bodies to 1 MB, and carries the host run's cancellation signal through
+to fetch. The backend and origin come from trusted host configuration, never from tool
+arguments. Tests use the non-resolving `https://search.test.invalid` origin and an injected
+fixture response; they do not send queries to external search services.
+
+This adapter is not enabled in the legacy MCP entrypoint or any deployed host. Search
+queries are sent to the configured upstream when a host explicitly enables real fetch, so
+do not pass private user data through it without an approved query-privacy policy.
+
 Provenance:
 - `99c-search-searxng.js` moved from core `src/mcp-skills/tools/99c-search-searxng.js`
   with its tool name unchanged; the core copy is deleted once this sibling serves it.

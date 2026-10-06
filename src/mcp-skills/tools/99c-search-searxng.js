@@ -128,13 +128,17 @@ function orderPool(pool) {
   return pool.slice(off).concat(pool.slice(0, off));
 }
 
-function searxngUrls() {
-  const env = splitList(process.env.SEARXNG_URL);
-  return orderPool(env.length ? env : DEFAULT_SEARXNG_POOL);
+function runtimeEnv(ctx) {
+  return ctx && ctx.env && typeof ctx.env === 'object' ? ctx.env : process.env;
 }
 
-function backendChain() {
-  const raw = splitList(process.env.FREE_SEARCH_BACKEND).map((s) => s.toLowerCase());
+function searxngUrls(env) {
+  const urls = splitList(env.SEARXNG_URL);
+  return orderPool(urls.length ? urls : DEFAULT_SEARXNG_POOL);
+}
+
+function backendChain(env) {
+  const raw = splitList(env.FREE_SEARCH_BACKEND).map((s) => s.toLowerCase());
   return raw.length ? raw : ['duckduckgo', 'searxng', 'brave'];
 }
 
@@ -142,20 +146,20 @@ function backendChain() {
 // instance base URL. DuckDuckGo and Brave cool down after ANY failure (their block is IP-global),
 // an instance only after a transport failure — an empty SERP is query-dependent, not an outage.
 const downUntil = new Map();
-function cooldownMs(key) {
-  const env =
-    key === 'duckduckgo' ? process.env.FREE_SEARCH_DDG_COOLDOWN_MS
-      : key === 'brave' ? process.env.FREE_SEARCH_BRAVE_COOLDOWN_MS
-        : process.env.FREE_SEARCH_SEARXNG_COOLDOWN_MS;
-  const n = Number.parseInt(env, 10);
+function cooldownMs(key, env) {
+  const configured =
+    key === 'duckduckgo' ? env.FREE_SEARCH_DDG_COOLDOWN_MS
+      : key === 'brave' ? env.FREE_SEARCH_BRAVE_COOLDOWN_MS
+        : env.FREE_SEARCH_SEARXNG_COOLDOWN_MS;
+  const n = Number.parseInt(configured, 10);
   return Number.isFinite(n) ? n : COOLDOWN_DEFAULT_MS;
 }
-function isCoolingDown(key) {
-  const ms = cooldownMs(key);
+function isCoolingDown(key, env) {
+  const ms = cooldownMs(key, env);
   return ms > 0 && Date.now() < (downUntil.get(key) || 0);
 }
-function markDown(key) {
-  downUntil.set(key, Date.now() + cooldownMs(key));
+function markDown(key, env) {
+  downUntil.set(key, Date.now() + cooldownMs(key, env));
 }
 function markUp(key) {
   downUntil.delete(key);
@@ -395,7 +399,8 @@ const tools = {
         return { error: 'no_fetch', message: 'search_serp_free: fetch is not available in this runtime' };
       }
 
-      const chain = backendChain();
+      const env = runtimeEnv(ctx);
+      const chain = backendChain(env);
       if (!chain.length) {
         return { error: 'bad_backend', message: 'search_serp_free: FREE_SEARCH_BACKEND names no known backend' };
       }
@@ -421,11 +426,11 @@ const tools = {
         // one job per candidate: single-URL backends carry base=null, searxng carries the instance
         const jobs =
           backend === 'searxng'
-            ? searxngUrls().map((base) => ({ base, source: base }))
+            ? searxngUrls(env).map((base) => ({ base, source: base }))
             : [{ base: null, source: backend === 'duckduckgo' ? 'html.duckduckgo.com' : 'search.brave.com' }];
         for (const job of jobs) {
           const key = backend === 'searxng' ? job.base : backend;
-          if (isCoolingDown(key)) {
+          if (isCoolingDown(key, env)) {
             attempts.push({
               backend,
               source: job.source,
@@ -449,7 +454,7 @@ const tools = {
           // DuckDuckGo/Brave cool down after any failure (their block is IP-global); a SearXNG
           // instance only after a transport failure — an empty SERP for THIS query says nothing
           // about the next one, and cooling it down would drop the only RU-capable instance.
-          if (backend !== 'searxng' || out.transport) markDown(key);
+          if (backend !== 'searxng' || out.transport) markDown(key, env);
           attempts.push({ backend, source: job.source, reason: out.fail });
         }
       }

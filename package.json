@@ -4,6 +4,10 @@
   "private": true,
   "description": "Internet search domain skill (search_serp_free — keyless SERP scraping) — MCP server mounted by trained-assist-agent as the search-skills sibling",
   "main": "src/mcp-skills/index.js",
+  "exports": {
+    ".": "./src/mcp-skills/index.js",
+    "./host-provider": "./src/host-provider.js"
+  },
   "scripts": {
     "check": "node -e \"require('fs').readdirSync('src/mcp-skills/tools').forEach(f => require('./src/mcp-skills/tools/'+f))\" && node --check src/mcp-skills/index.js",
     "test": "node --test tests/*.test.cjs"
